@@ -1,0 +1,259 @@
+---
+author: "Raphael Edison Most"
+date: "5 4 2021"
+output: 
+  html_document: 
+    toc: true
+    theme: lumen
+    toc_depth: 5
+includes:
+  in_header: ../2_Assets/header.Rhtml
+  
+---
+
+```
+author: "Raphael Edison Most"
+date: "5 4 2021"
+output: 
+  html_document: 
+    toc: true
+    theme: lumen
+    toc_depth: 5
+includes:
+  in_header: ../2_Assets/header.Rhtml
+```
+Wird leider nicht richtig umgesetzt
+````
+[WARNING] This document format requires a nonempty <title> element.
+  Defaulting to 'Airbnb_level_one.utf8' as the title.
+  To specify a title, use 'title' in metadata or --metadata title="...".
+
+Output created: Airbnb_level_one.html
+````
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dev.args = list(bg = "transparent"))
+
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(sjPlot)
+
+Airbnb <- read_csv("../1_Data/Airbnb.csv")
+
+Airbnb_1819 <- Airbnb %>% 
+  filter(Erstellungsdatum > "2018-01-01", 
+         Erstellungsdatum < "2019-12-31")
+```
+
+```{r, echo=TRUE}
+# FEHLERMELDUNG konnte Funktion "theme_set" nicht finden wenn es ins r setup eingefügt wurde
+
+# theme_set(theme_minimal())
+# theme_update(panel.background = element_rect(fill = "transparent", colour = NA),
+#              plot.background = element_rect(fill = "transparent", colour = NA))
+# 
+# ggplot <- function(...) ggplot2::ggplot(...) + 
+#   scale_fill_gradientn(colors = c('#555555','#6BB7B9')) + 
+#   scale_colour_gradientn(colors = c('#555555','#6BB7B9'))
+
+```
+
+
+### Präambel
+Dieser Bericht analysiert Veränderungen in den Neueinstellungen und den Preisen von Airbnb Objekten in Berlin, Deutschland. Er wurde zum Zwecke der Übung auf Basis öffentlich verfügbarer Daten ^[Daten wurde heruntergeladen von [insideairbnb.com](http://insideairbnb.com/get-the-data.html)] erstellt und repräsentiert einzig die Position der Autoren. Es besteht keine Beziehung zu Airbnb.  
+
+### Neueinstellungen
+
+#### Entwicklung
+Seit `r strftime(min(Airbnb_1819$Erstellungsdatum), "%d.%m.%Y")` wurden in Berlin `r nrow(Airbnb_1819)` Airbnb Wohnungen eingestellt. Von diesen Wohnungn weisen aktuell `r round(mean(Airbnb_1819$Verfügbarkeit_90Tage > 0) * 100)`% Verfügbarkeiten von durchschnittlich 47.5 Tagen für die nächsten 3 Monate auf.
+
+Einstellungen von Airbnb Wohnungen haben im letzten Jahr stark zugenommen. Im Jahr 2019 wurden insgesamt `r n_2019 <- sum(year(Airbnb_1819$Erstellungsdatum) == 2019); n_2019` neue Wohnungen eingestellt, wohingegend im Jahr 2018 nur `r n_2018 <- sum(year(Airbnb_1819$Erstellungsdatum) == 2018); n_2018` Wohnungen eingestellt wurden. Dies entspricht einem Zuwachs von `r (round(n_2019/n_2018, 2) - 1)*100`%.
+
+```{r, fig.asp = .5, fig.cap = cap}
+
+# Plotte Häufigkeiten
+ggplot(Airbnb_1819 %>% 
+      group_by(Jahr = year(Erstellungsdatum), 
+               Monat_tmp = month(Erstellungsdatum)) %>% 
+      summarize(Monat = as_factor(paste(first(Jahr), first(Monat_tmp), sep = '-')),
+                Wohnungen = n()), 
+      aes(x = Monat, y = Wohnungen, fill = Jahr)) + 
+      geom_bar(stat = 'identity', position = 'dodge') + 
+      theme(legend.position = 'none',
+      axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+cap = "Abbildung 1. Neueinstellungen pro Monat."
+```
+
+#### Stadtteile
+
+```{r, fig.asp = .5, fig.cap = cap, echo=TRUE}
+# Berechne Häufigkeiten über die Bezirke
+stadtteile <- Airbnb_1819 %>% 
+              group_by(Stadtteil, 
+                       Jahr = year(Erstellungsdatum)) %>% 
+              summarize(Wohnungen = n()) %>% 
+              ungroup() %>% 
+              arrange(desc(Jahr), Wohnungen) %>% 
+              mutate(Stadtteil = as_factor(Stadtteil))
+
+# here this did not work
+cap = "Abbildung 2. Neueinstellungen pro Bezirk."
+```
+
+Neueinstellungen fallen nach wie vor sehr unterschiedlich in den Bezirken aus. Die meisten Neueinstellungen im Jahr 2019 gab es in `r stadtteile %>% filter(Jahr == 2019) %>% pull(Stadtteil) %>% last()`, die wenigsten in `r stadtteile %>% filter(Jahr == 2019) %>% pull(Stadtteil) %>% first()`.
+
+```{r}
+# Veränderung über die Stadtteile
+veränderung = stadtteile %>% 
+  group_by(Stadtteil) %>% 
+  summarize(veränderung = (100 * (Wohnungen[Jahr == 2019]/Wohnungen[Jahr == 2018] - 1)) %>% round(1))
+
+# Geringsten Veränderung
+min_veränderung = veränderung %>% 
+  slice(which.min(veränderung)) %>% 
+  pull(veränderung)
+
+# Stadteil mit der geringsten Veränderung
+min_stadtteil = veränderung %>% 
+  slice(which.min(veränderung)) %>% 
+  pull(Stadtteil)
+
+# Grösste Veränderung
+max_veränderung = veränderung %>% 
+  slice(which.max(veränderung)) %>% 
+  pull(veränderung)
+
+# Stadteil mit der grössten Veränderung
+max_stadtteil = veränderung %>% 
+  slice(which.max(veränderung)) %>% 
+  pull(Stadtteil)
+```
+
+
+Die grössten Veränderungen gab es in `r min_stadtteil` und `r max_stadtteil`. In `r min_stadtteil`, `r ifelse(max_veränderung > 0, "wuchsen", "schrumpften")` die Neueinstellungen um `r min_veränderung`%, in `r max_stadtteil` `r ifelse(max_veränderung > 0, "wuchsen", "schrumpften")` die Neueinstellungen um `r max_veränderung`%.
+
+```{r}
+# Plotte Häufigkeieten der Stadtteile
+ggplot(stadtteile, 
+       aes(y = Stadtteil, x = Wohnungen, group = Jahr, fill = Jahr)) + 
+       geom_bar(stat = 'identity', position = 'dodge') + 
+       theme(legend.position = 'none') + 
+       labs(y = '')
+```
+
+
+### Preis
+
+This here gives an error, included as a comment that i can show it, without blocking the rest from running
+```{r, echo=TRUE}
+# Der durchschnittliche Preis der Neueinstellungen beträgt `r round(mean(airbnb_1819 %>% pull(Preis)),1)`E. Im Vergleich zum Vorjahr sind die Preise der Neueinstellungen um `r m <- mean(airbnb_1819 %>% filter(year(Erstellungsdatum) == 2019) %>% pull(Preis))/ mean(airbnb_1819 %>% filter(year(Erstellungsdatum) == 2018) %>% pull(Preis)) ; round(m, 3) * 100 - 100`% gestiegen.
+```
+
+
+#### Einfluss Ausstattung
+
+
+```{r}
+
+# DIESER ABSCHNITT SAGT, airbnb_1819 KANN NCIHT GEFUNDEN WERDEN
+
+# # Vektor mit Ausstattungsmerkmalen
+# ausstattung_var <- c('Küche','Wifi','TV','Kaffeemaschine',
+#                      'Geschirrspüler','Terrasse_Balkon',
+#                      'Check_in_24h')
+# 
+# # Bestimme Preise als Funktion der Ausstattungsmerkmale
+# ausstattung <- 
+#   airbnb_1819 %>% 
+#     select(all_of(ausstattung_var), Preis) %>%
+#     pivot_longer(-Preis,
+#     names_to = 'Ausstattung',
+#     values_to = 'Ausstattung_vorhanden') %>% 
+#     group_by(Ausstattung) %>% 
+#     summarize(Nicht_vorhanden = mean(Preis[!Ausstattung_vorhanden]),
+#               Vorhanden = mean(Preis[Ausstattung_vorhanden]),
+#               Differenz = Vorhanden - Nicht_vorhanden, 
+#               Prozent_vorhanden = mean(Ausstattung_vorhanden) * 100) %>% 
+#     arrange(desc(Differenz))  
+```
+
+````
+Jetzt zu etwas sehr bizarrem.
+Zum gefühlt dritten Mal musste ich den ganzen Text neu schreiben, da der Cursor ein Zeichen weiter war als der Buchstabe an sich, beim ersten Mal als dies aufgetreten ist habe ich r und den ganzen Computer neu gestartet, da es jetzt zum dritten Mal passiert ist, glaube ich es liegt am copy paste von der Website
+Wenn ich 72.9 löschen möchte, und den Cursor hinter 9 platziere löscht es «.» Anstelle von «9». Das Einfügen von code geschieht auch nicht am richtigen Ort. Dies tritt bei beiden der folgenden Textabschnitte auf, bei den bisherigen Orten habe ich es mir nicht notiert.
+
+````
+
+Das Austattungsmerkmal mit dem grössten Unterschied im Preis ist Check_in_24h (72.9), das Austattungsmerkmal mit dem kleinsten Unterschied im Preis ist Küche (-88.9).
+
+Der stark negative Effekt der Küche überrascht, er könnte jedoch durch die Art der Unterkunft moderiert werden, gegeben dass auch Hotels im Angebot enthalten sind.
+
+
+##### L - Preis: Tabelle 1 erzeugen
+
+Erstelle einen neuen Code Chunk mit einer Tabelle basierend auf ausstattung. Verwende dafür die kable() Funktion. Siehe unten.
+```{r, echo=TRUE}
+
+# FEHLERMELDUNG ausstattung KONNTE NICHT GEFUNDEN WERDEN
+
+# # Plotte Tabelle mit Austattungsmerkmalen
+# ausstattung %>% kable(format = 'html')
+
+```
+
+
+#### Regressionsmodell
+
+```{r, echo=TRUE}
+
+# FEHLERMELDUNG airbnd_1819 KONNTE NICHT GEFUNDEN WERDEN
+
+# # Reduzierter Vektor mit Ausstattungsmerkmalen
+# ausstattung_var <- c('Küche','TV','Terrasse_Balkon','Check_in_24h')
+# 
+# # Bereit den Datensatz für die Regression vor
+# ausstattung <- 
+#   airbnb_1819 %>% 
+#     mutate(Hotel = Unterkunftsart %in% c('Boutique hotel', 'Hotel')) %>% 
+#     select(Preis, Hotel, all_of(ausstattung_var)) 
+# 
+# # Rechne Regression des Preises auf Austattungsmerkmale und Hotel
+# ausstattung_mod <- 
+#   ausstattung %>% 
+#     lm(formula = Preis ~ .)
+#   
+# # Bestimme Anteil Hotels in 2018 und 2019
+# hotel <- 
+#   airbnb_1819 %>% 
+#     group_by(year(Erstellungsdatum)) %>% 
+#     summarize(Anteil = mean(Unterkunftsart %in% c('Boutique hotel', 'Hotel')))   
+```
+
+Die Regression legt nahe, dass Küche, TV und Terrasse oder Balkon den grössten Einfluss auf den Preis in denletztene beiden Jahren hatten.
+
+Der Einfluss der Küche ist gegenüber dem Unterschied in Tabelle 1 gesunken, jedoch nach wie vor signifikant.
+
+**Überraschenderweise ist der Effekt eines 24h Check-ins, welcher deskriptiv am grössten ausfiel, nicht signifikant. Dies ist ebenfalls auf den Zusammen zur Unterkunftsart zurückzuführen**
+
+Es besteht ein substantieller Unterschied im Preis zwischen Unterkunftsarten. Hotels haben eine um 437.3€ höheren Preis als Unterkünfte die keine Hotels sind.
+
+**Der Anteil von Hotels ist von 1.1% im Jahre 2018 auf 1.4% im Jahre 2019 gestiegen. Es liegt nahe, dass der Anstieg im Anteil der Hotels, den Anstieg der Objektpreise verursacht.**
+
+```{r, echo=TRUE}
+# AUFGRUND DER VORHERIGEN FEHLER KONNTE DIES HIER NICHT AUSGEFÜHT WERDEN
+
+# # Tabelle mit Ergebnissen der Regression
+# tab_model(ausstattung_mod)
+# 
+# pred.labels = c('Achsenabschnitt', names(ausstattung)[-1])
+# title = 'Table 2. Regression des Preises auf die Ausstattung.'
+```
+
+  
+DISCLAIMER: Aufgrund der vielen bisherigen Fehlern habe ich hier abgebrochen und die Aufgaben P und Q nicht begonnen.
+
